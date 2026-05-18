@@ -1,0 +1,11 @@
+# API 키 — 절대 커밋하지 마세요
+config.js
+.env
+
+# 로컬 심사 로그 (선택적으로 gitignore)
+# screening_log/
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+node_modules/
