@@ -1,6 +1,6 @@
-// app.js — Screening Agent v1.1
+// app.js — Screening Agent v1.2
 const SK = 'screening-agent-v1';
-const NOTION_DS = 'collection://42443699-1dd8-4e0d-9560-1ca63ad2a78e';
+const API_KEY_SK = 'screening-agent-apikey';
 
 let S = {
   criteria: [
@@ -21,16 +21,27 @@ let S = {
 let lastResult = null;
 let selectedType = '합격 이유';
 
-function loadState() {
-  try { const s = localStorage.getItem(SK); if (s) S = Object.assign({}, S, JSON.parse(s)); } catch(e) {}
-}
-function saveState() {
-  try { localStorage.setItem(SK, JSON.stringify(S)); } catch(e) {}
+function getApiKey() { return localStorage.getItem(API_KEY_SK) || ''; }
+function saveApiKey(key) { localStorage.setItem(API_KEY_SK, key); }
+function loadState() { try { const s = localStorage.getItem(SK); if (s) S = Object.assign({}, S, JSON.parse(s)); } catch(e) {} }
+function saveState() { try { localStorage.setItem(SK, JSON.stringify(S)); } catch(e) {} }
+
+function checkApiKey() {
+  const key = getApiKey();
+  if (!key) {
+    document.getElementById('api-key-banner').style.display = 'block';
+    document.getElementById('run-btn').disabled = true;
+  } else {
+    document.getElementById('api-key-banner').style.display = 'none';
+    document.getElementById('run-btn').disabled = false;
+    document.getElementById('saved-key-hint').textContent = 'sk-ant-...' + key.slice(-4);
+  }
 }
 
 function init() {
   loadState();
   renderCriteria(); renderPersonaFields(); renderLearnings(); renderHistory();
+  checkApiKey();
 
   document.getElementById('tabs').addEventListener('click', function(e) {
     const btn = e.target.closest('.tab'); if (!btn) return;
@@ -39,6 +50,23 @@ function init() {
     btn.classList.add('active');
     document.getElementById('pane-' + btn.dataset.pane).classList.add('active');
   });
+
+  document.getElementById('save-apikey-btn').onclick = function() {
+    const val = document.getElementById('apikey-input').value.trim();
+    if (!val.startsWith('sk-ant-')) { alert('올바른 API Key 형식이 아닙니다. sk-ant-로 시작해야 합니다.'); return; }
+    saveApiKey(val);
+    document.getElementById('apikey-input').value = '';
+    checkApiKey();
+    const btn = document.getElementById('save-apikey-btn');
+    btn.textContent = '저장됨 ✓'; setTimeout(() => { btn.textContent = '저장'; }, 1500);
+  };
+
+  document.getElementById('reset-apikey-btn').onclick = function() {
+    if (!confirm('저장된 API Key를 삭제할까요?')) return;
+    localStorage.removeItem(API_KEY_SK);
+    document.getElementById('saved-key-hint').textContent = '';
+    checkApiKey();
+  };
 
   document.getElementById('type-row').addEventListener('click', function(e) {
     const btn = e.target.closest('.type-btn'); if (!btn) return;
@@ -71,7 +99,7 @@ function renderCriteria() {
   const el = document.getElementById('criteria-list'); el.innerHTML = '';
   S.criteria.forEach((c, i) => {
     const row = document.createElement('div'); row.className = 'cr-row';
-    row.innerHTML = `<input type="text" value="${c.name}"><input type="number" value="${c.pts}" min="0" max="200" step="1"><button class="del">삭제</button>`;
+    row.innerHTML = '<input type="text" value="'+c.name+'"><input type="number" value="'+c.pts+'" min="0" max="200" step="1"><button class="del">삭제</button>';
     row.querySelector('input[type=text]').oninput = function() { S.criteria[i].name = this.value; };
     row.querySelector('input[type=number]').oninput = function() { S.criteria[i].pts = parseInt(this.value)||0; updateTotal(); };
     row.querySelector('.del').onclick = () => { S.criteria.splice(i,1); renderCriteria(); };
@@ -109,13 +137,7 @@ function renderLearnings() {
   const el = document.getElementById('learning-list');
   if (!S.learnings.length) { el.innerHTML = '<div class="hint" style="padding:4px 0">아직 기록 없음</div>'; return; }
   const tc = {'합격 이유':'lt-pass','불합격 이유':'lt-fail','놓쳤던 것':'lt-miss'};
-  el.innerHTML = S.learnings.map((l,i) => `
-    <div class="learn-item">
-      <span class="learn-type ${tc[l.type]||'lt-miss'}">${l.type||'기록'}</span>
-      <span style="font-size:11px;opacity:.6;margin-left:6px">${l.date}</span>
-      <div style="margin-top:4px">${l.text}</div>
-      <div style="margin-top:6px"><button class="btn-sm" data-li="${i}" style="font-size:11px">삭제</button></div>
-    </div>`).join('');
+  el.innerHTML = S.learnings.map((l,i) => '<div class="learn-item"><span class="learn-type '+(tc[l.type]||'lt-miss')+'">'+l.type+'</span><span style="font-size:11px;opacity:.6;margin-left:6px">'+l.date+'</span><div style="margin-top:4px">'+l.text+'</div><div style="margin-top:6px"><button class="btn-sm" data-li="'+i+'" style="font-size:11px">삭제</button></div></div>').join('');
   el.querySelectorAll('[data-li]').forEach(btn => {
     btn.onclick = function() { S.learnings.splice(parseInt(this.dataset.li),1); saveState(); renderLearnings(); };
   });
@@ -124,17 +146,7 @@ function renderLearnings() {
 function renderHistory() {
   const el = document.getElementById('history-list');
   if (!S.history.length) { el.innerHTML = '<div class="empty">아직 심사 기록이 없어요.<br>심사를 실행하면 여기에 쌓입니다.</div>'; return; }
-  el.innerHTML = S.history.map((h,i) => `
-    <div class="history-item" data-hi="${i}">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px;font-weight:500">${h.name}</span>
-        <button class="btn-sm del-h" data-hi="${i}" style="font-size:11px">삭제</button>
-      </div>
-      <div class="hmeta">
-        <span>${h.date}</span><span>${h.totalTeams}팀</span><span>${h.stage||''}</span>
-        ${h.notionSaved ? '<span class="badge-notion">Notion ✓</span>' : ''}
-      </div>
-    </div>`).join('');
+  el.innerHTML = S.history.map((h,i) => '<div class="history-item" data-hi="'+i+'"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:500">'+h.name+'</span><button class="btn-sm del-h" data-hi="'+i+'" style="font-size:11px">삭제</button></div><div class="hmeta"><span>'+h.date+'</span><span>'+h.totalTeams+'팀</span><span>'+(h.stage||'')+'</span>'+(h.notionSaved?'<span class="badge-notion">Notion ✓</span>':'')+'</div></div>').join('');
   el.querySelectorAll('.history-item').forEach(item => {
     item.onclick = function(e) { if(e.target.classList.contains('del-h')) return; showHistory(parseInt(this.dataset.hi)); };
   });
@@ -157,34 +169,8 @@ function showHistory(i) {
 
 function buildSystem() {
   const p = S.persona;
-  const learn = S.learnings.length
-    ? '\n\n[심사 후 학습 기록]\n' + S.learnings.map(l => `[${l.type}] ${l.text}`).join('\n')
-    : '';
-  return `당신은 스파크랩 VC 파트너 이희윤의 심사 에이전트입니다.
-
-[투자 철학]
-${p.philosophy}
-
-[창업가 조건]
-${p.founder}
-
-[즉시 탈락시키는 패턴]
-${p.no}
-
-[킬러 질문 스타일]
-${p.question}
-
-[YC 필터]
-- 왜 지금인가?
-- 이상하지만 말이 되는가?
-- 창업가가 남들이 못 본 걸 봤는가?
-- 빠르게 실패하고 pivot할 수 있는 팀인가 — 긍정 지표${learn}
-
-[심사 원칙]
-- "나쁘지 않다"는 탈락이다
-- 익스큐즈 찾는 팀에 가혹하게
-- 점수 비선형 — 합격팀과 나머지 20~30점 차
-- 숫자보다 신념`;
+  const learn = S.learnings.length ? '\n\n[심사 후 학습 기록]\n' + S.learnings.map(l => '['+l.type+'] '+l.text).join('\n') : '';
+  return '당신은 스파크랩 VC 파트너의 심사 에이전트입니다.\n\n[투자 철학]\n'+p.philosophy+'\n\n[창업가 조건]\n'+p.founder+'\n\n[즉시 탈락시키는 패턴]\n'+p.no+'\n\n[킬러 질문 스타일]\n'+p.question+'\n\n[YC 필터]\n- 왜 지금인가?\n- 이상하지만 말이 되는가?\n- 창업가가 남들이 못 본 걸 봤는가?\n- 빠르게 실패하고 pivot할 수 있는 팀인가 — 긍정 지표'+learn+'\n\n[심사 원칙]\n- "나쁘지 않다"는 탈락이다\n- 익스큐즈 찾는 팀에 가혹하게\n- 점수 비선형 — 합격팀과 나머지 20~30점 차\n- 숫자보다 신념';
 }
 
 function buildUser() {
@@ -195,32 +181,15 @@ function buildUser() {
   const sp = document.getElementById('special').value;
   const co = document.getElementById('company-data').value;
   const pts = S.criteria.reduce((s,c) => s+(parseInt(c.pts)||0), 0);
-  const cr = S.criteria.map(c => `- ${c.name} (${c.pts}점)`).join('\n');
-  return `[심사: ${name}]
-- 지원: ${tn||'?'}팀 / 선발: ${sn||'?'}팀 / 단계: ${st||'미지정'}
-- 특이사항: ${sp||'없음'}
-
-[평가 기준 총 ${pts}점]
-${cr}
-
-[평가 대상]
-${co}
-
----
-각 팀 평가:
-**[팀명]**
-A. 점수 (항목별/합계)
-B. 핵심 강점 (최대 3개)
-C. 결정적 약점 (최대 3개)
-D. 킬러 질문 (1~2개)
-E. 판정: 합격 / 보류 / 탈락
-
-전체 평가 후: 순위 요약 + 합격 추천 팀 + gap 근거`;
+  const cr = S.criteria.map(c => '- '+c.name+' ('+c.pts+'점)').join('\n');
+  return '[심사: '+name+']\n- 지원: '+(tn||'?')+'팀 / 선발: '+(sn||'?')+'팀 / 단계: '+(st||'미지정')+'\n- 특이사항: '+(sp||'없음')+'\n\n[평가 기준 총 '+pts+'점]\n'+cr+'\n\n[평가 대상]\n'+co+'\n\n---\n각 팀 평가:\n**[팀명]**\nA. 점수 (항목별/합계)\nB. 핵심 강점 (최대 3개)\nC. 결정적 약점 (최대 3개)\nD. 킬러 질문 (1~2개)\nE. 판정: 합격 / 보류 / 탈락\n\n전체 평가 후: 순위 요약 + 합격 추천 팀 + gap 근거';
 }
 
 async function runScreening() {
   const co = document.getElementById('company-data').value.trim();
   if (!co) { alert('팀 정보를 입력해주세요.'); return; }
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('API Key를 먼저 설정해주세요.'); return; }
   const btn = document.getElementById('run-btn');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>심사 중...';
   const name = document.getElementById('prog-name').value||'심사';
@@ -229,13 +198,24 @@ async function runScreening() {
   document.getElementById('result-text').textContent = '';
   document.getElementById('notion-btn').disabled = true;
   document.getElementById('notion-status').style.display = 'none';
-  const apiKey = (typeof CONFIG !== 'undefined') ? CONFIG.ANTHROPIC_API_KEY : '';
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(apiKey ? {'x-api-key': apiKey} : {}) },
-      body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,stream:true,system:buildSystem(),messages:[{role:'user',content:buildUser()}]})
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        stream: true,
+        system: buildSystem(),
+        messages: [{role:'user', content: buildUser()}]
+      })
     });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error?.message || res.statusText); }
     const reader = res.body.getReader(); const dec = new TextDecoder(); let full = '';
     while (true) {
       const {done,value} = await reader.read(); if (done) break;
@@ -245,7 +225,7 @@ async function runScreening() {
         try { const j = JSON.parse(d); full += (j.delta&&j.delta.text||''); document.getElementById('result-text').textContent = full; } catch(e) {}
       }
     }
-    lastResult = {name, date:new Date().toLocaleDateString('ko-KR'), totalTeams:document.getElementById('total-n').value||'?', selectGoal:document.getElementById('select-n').value||'?', stage:document.getElementById('stage').value||'미지정', result:full, notionSaved:false};
+    lastResult = { name, date: new Date().toLocaleDateString('ko-KR'), totalTeams: document.getElementById('total-n').value||'?', selectGoal: document.getElementById('select-n').value||'?', stage: document.getElementById('stage').value||'미지정', result: full, notionSaved: false };
     S.history.unshift(lastResult); saveState(); renderHistory();
     document.getElementById('notion-btn').disabled = false;
   } catch(e) { document.getElementById('result-text').textContent = '오류: ' + e.message; }
@@ -257,38 +237,19 @@ async function saveToNotion() {
   const btn = document.getElementById('notion-btn');
   const status = document.getElementById('notion-status');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>저장 중...';
-  const learnSummary = S.learnings.slice(0,3).map(l=>`[${l.type}] ${l.text}`).join(' / ')||'없음';
-  // Notion API 직접 호출 (config.js에 토큰이 있을 때)
-  const token = (typeof CONFIG !== 'undefined') ? CONFIG.NOTION_TOKEN : '';
-  if (token) {
+  const learnSummary = S.learnings.slice(0,3).map(l=>'['+l.type+'] '+l.text).join(' / ')||'없음';
+  const notionToken = localStorage.getItem('screening-notion-token')||'';
+  if (notionToken) {
     try {
       await fetch('https://api.notion.com/v1/pages', {
         method: 'POST',
-        headers: {'Content-Type':'application/json','Authorization':'Bearer '+token,'Notion-Version':'2022-06-28'},
-        body: JSON.stringify({
-          parent: {database_id: '42443699-1dd8-4e0d-9560-1ca63ad2a78e'},
-          properties: {
-            '심사명': {title:[{text:{content:lastResult.name}}]},
-            '프로그램': {rich_text:[{text:{content:lastResult.name}}]},
-            '회사 단계': {select:{name:lastResult.stage||'미지정'}},
-            '지원 팀 수': {number:parseInt(lastResult.totalTeams)||0},
-            '선발 목표': {number:parseInt(lastResult.selectGoal)||0},
-            '판정 요약': {rich_text:[{text:{content:lastResult.result.slice(0,1900)}}]},
-            '페르소나 학습': {rich_text:[{text:{content:learnSummary}}]},
-            '심사일': {date:{start:new Date().toISOString().split('T')[0]}},
-          }
-        })
+        headers: {'Content-Type':'application/json','Authorization':'Bearer '+notionToken,'Notion-Version':'2022-06-28'},
+        body: JSON.stringify({ parent: {database_id: '42443699-1dd8-4e0d-9560-1ca63ad2a78e'}, properties: { '심사명': {title:[{text:{content:lastResult.name}}]}, '프로그램': {rich_text:[{text:{content:lastResult.name}}]}, '회사 단계': {select:{name:lastResult.stage||'미지정'}}, '지원 팀 수': {number:parseInt(lastResult.totalTeams)||0}, '선발 목표': {number:parseInt(lastResult.selectGoal)||0}, '판정 요약': {rich_text:[{text:{content:lastResult.result.slice(0,1900)}}]}, '페르소나 학습': {rich_text:[{text:{content:learnSummary}}]}, '심사일': {date:{start:new Date().toISOString().split('T')[0]}} }})
       });
       status.textContent = 'Notion에 저장됐어요.';
-      status.style.display = 'block';
-    } catch(e) {
-      status.textContent = '저장 오류: ' + e.message;
-      status.style.display = 'block';
-    }
-  } else {
-    status.textContent = 'config.js에 NOTION_TOKEN을 추가하면 자동 저장됩니다.';
-    status.style.display = 'block';
-  }
+    } catch(e) { status.textContent = '저장 오류: ' + e.message; }
+  } else { status.textContent = '설정 탭에서 Notion Token을 먼저 입력해주세요.'; }
+  status.style.display = 'block';
   lastResult.notionSaved = true;
   S.history[0].notionSaved = true; saveState(); renderHistory();
   btn.disabled = false; btn.textContent = 'Notion 저장';
