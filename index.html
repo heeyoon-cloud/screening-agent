@@ -1,24 +1,33 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Screening Agent — SparkLabs</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screening Agent — SparkLabs</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
   <header class="app-header">
     <span class="logo">Screening Agent</span>
-    <span class="version">v1.1</span>
+    <span class="version">v1.2</span>
   </header>
-
+  <div id="api-key-banner" class="api-banner" style="display:none">
+    <div class="api-banner-inner">
+      <div class="api-banner-title">API Key를 설정해주세요</div>
+      <div class="api-banner-desc">심사를 실행하려면 Anthropic API Key가 필요합니다. 한 번 입력하면 이 브라우저에 저장됩니다.</div>
+      <div class="api-banner-row">
+        <input type="password" id="apikey-input" placeholder="sk-ant-..." style="flex:1">
+        <button class="btn-save" id="save-apikey-btn">저장</button>
+      </div>
+    </div>
+  </div>
   <div class="tabs" id="tabs">
     <button class="tab active" data-pane="run">심사 실행</button>
     <button class="tab" data-pane="persona">페르소나</button>
     <button class="tab" data-pane="history">히스토리</button>
+    <button class="tab" data-pane="settings">설정</button>
   </div>
-
   <div id="pane-run" class="pane active">
     <div class="card">
       <div class="row-hd"><span class="sec">심사 기본 정보</span></div>
@@ -39,22 +48,17 @@
       </div>
       <div><label class="lbl">특이사항 (선택)</label><input type="text" id="special" placeholder="딥테크 특화, 여성 창업가 우대 등"></div>
     </div>
-
     <div class="card">
       <div class="row-hd"><span class="sec">평가 기준</span><button class="btn-sm" id="add-cr-btn">+ 추가</button></div>
       <div id="criteria-list"></div>
       <div class="total-row">합계: <span id="total-pts">0</span>점</div>
     </div>
-
     <div class="card">
       <div class="sec" style="margin-bottom:6px">평가 대상 팀 정보</div>
       <div class="hint">팀별로 줄 바꿔서 입력. IR 내용 그대로 붙여넣기 가능.</div>
-      <textarea id="company-data" class="mono" style="min-height:140px"
-        placeholder="팀 A: 시니어 간병 매칭. 요양보호사-가족 연결. 창업자 본인 경험 기반.&#10;&#10;팀 B: B2B 영업 자동화 SaaS. ..."></textarea>
+      <textarea id="company-data" class="mono" style="min-height:140px" placeholder="팀 A: 시니어 간병 매칭. 요양보호사-가족 연결.&#10;&#10;팀 B: ..."></textarea>
     </div>
-
     <button class="btn-run" id="run-btn">심사 시작 ↗</button>
-
     <div id="result-area" style="display:none;margin-top:1rem">
       <div class="card">
         <div class="row-hd">
@@ -69,17 +73,15 @@
       </div>
     </div>
   </div>
-
   <div id="pane-persona" class="pane">
     <div class="card">
       <div class="row-hd"><span class="sec">심사 철학 편집</span><button class="btn-save" id="save-persona-btn">저장</button></div>
-      <div class="hint" style="margin-bottom:12px">이 내용이 매 심사마다 system prompt로 들어갑니다.</div>
+      <div class="hint" style="margin-bottom:12px">이 내용이 매 심사마다 AI에게 전달됩니다.</div>
       <div class="pb"><label class="lbl">나의 투자 철학</label><textarea id="p-philosophy" style="min-height:90px"></textarea></div>
       <div class="pb"><label class="lbl">내가 보는 창업가의 조건</label><textarea id="p-founder" style="min-height:70px"></textarea></div>
       <div class="pb"><label class="lbl">즉시 탈락시키는 패턴</label><textarea id="p-no" style="min-height:70px"></textarea></div>
       <div><label class="lbl">킬러 질문 스타일</label><textarea id="p-question" style="min-height:55px"></textarea></div>
     </div>
-
     <div class="card">
       <div class="row-hd"><span class="sec">심사 후 학습 기록</span><button class="btn-sm" id="add-learn-btn">+ 추가</button></div>
       <div class="hint">합격/불합격 이유, 놓쳤던 것을 기록할수록 페르소나가 강화됩니다.</div>
@@ -88,11 +90,9 @@
         <button class="type-btn" data-type="불합격 이유">불합격 이유</button>
         <button class="type-btn" data-type="놓쳤던 것">놓쳤던 것</button>
       </div>
-      <textarea id="learn-input" style="min-height:55px;margin-top:8px"
-        placeholder="예: 합격 팀은 모두 창업자가 고객 인터뷰를 50명 이상 직접 했다."></textarea>
+      <textarea id="learn-input" style="min-height:55px;margin-top:8px" placeholder="예: 합격 팀은 모두 창업자가 고객 인터뷰를 50명 이상 직접 했다."></textarea>
       <div id="learning-list" style="margin-top:12px"></div>
     </div>
-
     <div class="card">
       <div class="sec" style="margin-bottom:8px">YC 필터 (고정)</div>
       <div class="yc-list">
@@ -103,12 +103,55 @@
       </div>
     </div>
   </div>
-
   <div id="pane-history" class="pane">
     <div id="history-list"></div>
   </div>
+  <div id="pane-settings" class="pane">
+    <div class="card">
+      <div class="sec" style="margin-bottom:8px">API Key 설정</div>
+      <div class="hint" style="margin-bottom:12px">브라우저에만 저장됩니다. 서버로 전송되지 않습니다.</div>
+      <div class="pb"><label class="lbl">Anthropic API Key</label>
+        <input type="password" id="apikey-input" placeholder="sk-ant-...">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <button class="btn-save" id="save-apikey-btn">저장</button>
+        <span style="font-size:12px;color:var(--text3)" id="saved-key-hint"></span>
+        <button class="btn-sm" id="reset-apikey-btn" style="margin-left:auto;font-size:11px">초기화</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec" style="margin-bottom:8px">Notion 연동 (선택)</div>
+      <div class="hint" style="margin-bottom:12px">심사 결과를 Notion DB에 자동 저장합니다.</div>
+      <div class="pb"><label class="lbl">Notion Integration Token</label>
+        <input type="password" id="notion-token-input" placeholder="secret_...">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <button class="btn-save" id="save-notion-btn">저장</button>
+        <span style="font-size:12px;color:var(--text3)" id="saved-notion-hint"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec" style="margin-bottom:8px">데이터 관리</div>
+      <div class="hint" style="margin-bottom:12px">모든 데이터는 이 브라우저 로컬에만 저장됩니다.</div>
+      <button class="btn-sm" id="reset-all-btn" style="color:var(--red-text);border-color:var(--red-border)">전체 데이터 초기화</button>
+    </div>
+  </div>
 </div>
-<script src="config.js"></script>
 <script src="app.js"></script>
+<script>
+  document.getElementById('save-notion-btn').onclick = function() {
+    const val = document.getElementById('notion-token-input').value.trim();
+    if (val) localStorage.setItem('screening-notion-token', val);
+    document.getElementById('notion-token-input').value = '';
+    const hint = document.getElementById('saved-notion-hint');
+    hint.textContent = '저장됨 ✓'; setTimeout(() => { hint.textContent = ''; }, 2000);
+  };
+  document.getElementById('reset-all-btn').onclick = function() {
+    if (!confirm('페르소나, 학습 기록, 히스토리가 모두 삭제됩니다. 계속할까요?')) return;
+    localStorage.clear(); location.reload();
+  };
+  const nt = localStorage.getItem('screening-notion-token');
+  if (nt) document.getElementById('saved-notion-hint').textContent = 'secret_...' + nt.slice(-4);
+</script>
 </body>
 </html>
